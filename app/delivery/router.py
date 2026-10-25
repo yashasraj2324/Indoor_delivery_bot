@@ -31,8 +31,8 @@ from app.delivery.state_machine import DeliveryStateMachine, InvalidTransitionEr
 
 
 router = APIRouter(prefix="/deliveries", tags=["Deliveries"])
-# No navigation transport is configured in this backend. Keep the state machine
-# available for explicit adapter injection, but never simulate physical progress.
+# Startup injects the authenticated gateway adapter when the command channel is
+# enabled; tests may continue to inject another adapter explicitly.
 delivery_state_machine: DeliveryStateMachine | None = None
 
 

@@ -29,6 +29,15 @@ authenticated header. Messages larger than `ROBOT_GATEWAY_MAX_MESSAGE_BYTES`
 (default 16384 bytes) are rejected. Unknown fields are rejected in the envelope
 and typed telemetry fields.
 
+For a local laptop backend, use `ws://127.0.0.1:8000/ws/robot` when the
+gateway runs on the laptop, or the laptop's reachable LAN address when the
+gateway runs on a phone. Always send both headers during the WebSocket
+handshake; do not put the API key in the URL. The first frame after the socket
+opens must be a v1 `hello` envelope with an empty payload, followed by the
+`hello_ack` response before sending heartbeat or telemetry frames. A client
+that sends a legacy URL query key, omits `hello`, sends a naive timestamp, or
+reuses message IDs will be rejected.
+
 ## Handshake and telemetry
 
 The first message must be `hello` with an empty payload. The backend replies:
@@ -112,3 +121,41 @@ expiry, idempotency, supervisor acknowledgement, and a timeout/failure path.
 It must not replay expired commands after reconnect. Backend acknowledgement
 must remain separate from robot-side safety state and verified actuation. No
 such adapter is implemented or tested here.
+
+## Optional laptop command channel
+
+Goal commands are enabled by default:
+
+```dotenv
+ROBOT_COMMAND_CHANNEL_ENABLED=true
+ROBOT_COMMAND_TTL_S=15
+ROBOT_COMMAND_ACK_TIMEOUT_S=5
+```
+
+Set `ROBOT_COMMAND_CHANNEL_ENABLED=false` to disable dispatch. Use the enabled
+channel only for a reviewed, stationary simulator or hardware integration test
+after the phone-side executor has been verified.
+When enabled, startup wires `DeliveryStateMachine` to the authenticated
+gateway adapter; when disabled, delivery dispatch returns
+`503 NAVIGATION_UNAVAILABLE` intentionally.
+
+The laptop sends only `goto` and `stop` command envelopes. The phone-side
+executor must independently validate command expiry, the `map` frame,
+coordinate and heading limits, supervisor health, and duplicate command IDs.
+Those protections are not implemented by this repository and must not be
+inferred from a command acknowledgement. A host-side stop request is
+best-effort; communication-loss stopping is not proven until an independent
+phone-side or firmware watchdog is tested.
+
+Safe simulator validation:
+
+1. Set `ROBOT_COMMAND_CHANNEL_ENABLED=false` when normal startup must not send
+   goal commands.
+2. Use the repository's simulator with a disposable robot/database and set the
+   three command-channel variables explicitly only in that test environment.
+3. Confirm the simulator sends headers, `hello`, timezone-aware increasing
+   timestamps, heartbeat, and telemetry.
+4. Exercise acknowledgement timeout, expiry rejection, disconnect cleanup, and
+   cancellation using `tests/test_gateway_failure_cases.py`.
+5. Do not use this simulator result as evidence of physical navigation, motor
+   stopping, or a safety watchdog.

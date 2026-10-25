@@ -84,12 +84,11 @@ the authenticated `/admin/users` endpoint.
 
 ### Robot and delivery execution boundary
 
-The backend has no mock navigation or simulation runtime. Delivery creation
-and history remain available, but dispatch, pickup-return navigation, and
-cancellation return HTTP 503 (`NAVIGATION_UNAVAILABLE`) until an authorized
-navigation transport is integrated. The delivery state machine remains an
-injectable component for isolated tests; it is not wired to a transport in the
-running application. The `/sim` and `/robot/manual-control` endpoints are not
+The backend has no mock navigation or simulation runtime. Dispatch,
+pickup-return navigation, and cancellation use the authenticated robot gateway
+when `ROBOT_COMMAND_CHANNEL_ENABLED=true` (the default); set it to `false` to
+disable those operations. The delivery state machine remains injectable for
+isolated tests. The `/sim` and `/robot/manual-control` endpoints are not
 provided. `ROSBRIDGE_ENABLED` defaults to false; this repository does not
 verify physical navigation, motor stop, or robot safety.
 

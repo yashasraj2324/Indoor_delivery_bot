@@ -98,10 +98,18 @@ class Settings(BaseSettings):
     # Mark telemetry stale before the heartbeat timeout takes the robot offline.
     ROBOT_STALE_AFTER_S: int = 3
     ROBOT_GATEWAY_MAX_MESSAGE_BYTES: int = 16_384
-    # Goal commands to the robot over its authenticated gateway socket. Off by default.
-    ROBOT_COMMAND_CHANNEL_ENABLED: bool = False
+    # Goal commands to the robot over its authenticated gateway socket.
+    ROBOT_COMMAND_CHANNEL_ENABLED: bool = True
     ROBOT_COMMAND_TTL_S: float = 15.0
     ROBOT_COMMAND_ACK_TIMEOUT_S: float = 5.0
+
+    @model_validator(mode="after")
+    def validate_robot_command_timeouts(self) -> "Settings":
+        if self.ROBOT_COMMAND_TTL_S <= 0 or self.ROBOT_COMMAND_TTL_S > 300:
+            raise ValueError("ROBOT_COMMAND_TTL_S must be in (0, 300]")
+        if self.ROBOT_COMMAND_ACK_TIMEOUT_S <= 0:
+            raise ValueError("ROBOT_COMMAND_ACK_TIMEOUT_S must be positive")
+        return self
 
     @model_validator(mode="after")
     def validate_robot_freshness_thresholds(self) -> "Settings":

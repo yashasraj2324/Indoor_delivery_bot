@@ -48,6 +48,18 @@ def test_production_configuration_accepts_tls_and_rejects_unsafe_settings(monkey
         config_module.validate_production_settings()
 
 
+def test_robot_command_channel_is_enabled_by_default_and_validates_timeouts():
+    defaults = config_module.Settings(_env_file=None)
+    assert defaults.ROBOT_COMMAND_CHANNEL_ENABLED is True
+    assert defaults.ROBOT_COMMAND_TTL_S == 15
+    assert defaults.ROBOT_COMMAND_ACK_TIMEOUT_S == 5
+
+    with pytest.raises(ValueError, match="ROBOT_COMMAND_TTL_S"):
+        config_module.Settings(_env_file=None, ROBOT_COMMAND_TTL_S=0)
+    with pytest.raises(ValueError, match="ROBOT_COMMAND_ACK_TIMEOUT_S"):
+        config_module.Settings(_env_file=None, ROBOT_COMMAND_ACK_TIMEOUT_S=0)
+
+
 @pytest.mark.asyncio
 async def test_public_registration_always_creates_user():
     class Result:

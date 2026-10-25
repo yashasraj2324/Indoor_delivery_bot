@@ -8,8 +8,11 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: mysql+aiomysql://root:root@db:3306/robot_db
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-mysql+aiomysql://root:root@db:3306/robot_db}
       REDIS_URL: redis://redis:6379/0
+      ROBOT_COMMAND_CHANNEL_ENABLED: ${ROBOT_COMMAND_CHANNEL_ENABLED:-true}
+      ROBOT_COMMAND_TTL_S: ${ROBOT_COMMAND_TTL_S:-15}
+      ROBOT_COMMAND_ACK_TIMEOUT_S: ${ROBOT_COMMAND_ACK_TIMEOUT_S:-5}
     depends_on:
       db:
         condition: service_healthy

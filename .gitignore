@@ -30,6 +30,8 @@ MANIFEST
 .env
 .env.production
 .env.local
+*.env
+213ui
 
 # Virtual environments
 venv/

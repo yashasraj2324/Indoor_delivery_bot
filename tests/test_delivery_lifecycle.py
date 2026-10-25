@@ -13,6 +13,7 @@ from app.db.models import (
 import app.delivery.state_machine as state_module
 from app.delivery.state_machine import DeliveryStateMachine, InvalidTransitionError
 from app.nav2.bridge import GoalResult, GoalStatus
+import app.delivery.router as delivery_router
 
 
 class ScriptedTestNavigation:
@@ -71,6 +72,14 @@ async def db_factory(monkeypatch):
 async def get_delivery(factory, delivery_id="delivery-1"):
     async with factory() as db:
         return await db.get(Delivery, delivery_id)
+
+
+def test_navigation_is_unavailable_without_explicit_transport(monkeypatch):
+    monkeypatch.setattr(delivery_router, "delivery_state_machine", None)
+    with pytest.raises(HTTPException) as error:
+        delivery_router._require_navigation()
+    assert error.value.status_code == 503
+    assert error.value.detail["error"] == "NAVIGATION_UNAVAILABLE"
 
 
 @pytest.mark.asyncio
