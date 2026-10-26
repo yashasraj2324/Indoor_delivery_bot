@@ -126,6 +126,50 @@ def test_alembic_configuration_preserves_url_encoded_credentials():
     assert parser.get("alembic", "sqlalchemy.url") == url
 
 
+@pytest.mark.parametrize("tls", [False, True])
+def test_alembic_engine_passes_tls_as_driver_connect_args(monkeypatch, tls):
+    import runpy
+    import ssl
+    from configparser import ConfigParser
+    from pathlib import Path
+    import alembic
+    import sqlalchemy.ext.asyncio as async_module
+    import app.db.session as session_module
+
+    parser = ConfigParser()
+    parser.add_section("alembic")
+    config = SimpleNamespace(
+        config_file_name=None, config_ini_section="alembic",
+        set_main_option=lambda name, value: parser.set("alembic", name, value),
+        get_section=lambda name, default: dict(parser.items(name)),
+    )
+    monkeypatch.setattr(alembic, "context", SimpleNamespace(config=config, is_offline_mode=lambda: False), raising=False)
+    options = {"ssl": ssl.create_default_context()} if tls else {}
+    monkeypatch.setattr(session_module, "_normalize_database_url", lambda _url:
+                        ("mysql+aiomysql://user:encoded%40password@db.example/robots", options))
+    real_factory = async_module.async_engine_from_config
+    run_sync = AsyncMock()
+    dispose = AsyncMock()
+
+    class ConnectionContext:
+        async def __aenter__(self): return SimpleNamespace(run_sync=run_sync)
+        async def __aexit__(self, *_args): return None
+
+    def factory(configuration, **kwargs):
+        assert "sqlalchemy.ssl" not in configuration
+        assert kwargs["connect_args"] is options
+        # Exercise the real SQLAlchemy argument validation without opening any
+        # connection. The previous sqlalchemy.ssl configuration raises here.
+        real_engine = real_factory(configuration, **kwargs)
+        real_engine.sync_engine.dispose()
+        return SimpleNamespace(connect=ConnectionContext, dispose=dispose)
+
+    monkeypatch.setattr(async_module, "async_engine_from_config", factory)
+    runpy.run_path(str(Path(__file__).resolve().parents[1] / "alembic" / "env.py"))
+    run_sync.assert_awaited_once()
+    dispose.assert_awaited_once()
+
+
 @pytest.mark.asyncio
 async def test_public_registration_always_creates_user():
     class Result:

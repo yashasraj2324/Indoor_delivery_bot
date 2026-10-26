@@ -35,9 +35,8 @@ _clean_url, _connect_args = _normalize_database_url(settings.DATABASE_URL)
 # ConfigParser treats percent signs as interpolation markers. Preserve URL-
 # encoded credentials (for example %40 for @) when storing the connection URL.
 config.set_main_option("sqlalchemy.url", _clean_url.replace("%", "%%"))
-# Persist the connect_args so the async engine picks them up.
-for _k, _v in _connect_args.items():
-    config.set_main_option(f"sqlalchemy.{_k}", str(_v))
+# Keep driver options as Python objects under connect_args. Serializing SSL as
+# sqlalchemy.ssl passes an invalid engine argument and loses the SSLContext.
 
 
 def run_migrations_offline() -> None:
@@ -62,7 +61,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations using an async engine."""
     section = config.get_section(config.config_ini_section, {})
-    # Re-inject connect_args (set above) into the engine config so
+    # Pass connect_args directly to the engine factory so
     # aiomysql's connect() gets them as **kwargs. We rebuild the SSL
     # arg via `_build_ssl_arg` so we never pass a dict to the asyncio
     # SSL transport (which breaks with `'dict' has no attribute 'wrap_bio'`).
@@ -74,16 +73,17 @@ async def run_async_migrations() -> None:
                 _connect_args.pop("ssl", None)
             else:
                 _connect_args["ssl"] = rebuilt
-        if _connect_args:
-            section["connect_args"] = _connect_args
     connectable = async_engine_from_config(
         section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=_connect_args,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
+    try:
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
+    finally:
+        await connectable.dispose()
 
 
 def run_migrations_online() -> None:
