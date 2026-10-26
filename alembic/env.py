@@ -32,7 +32,9 @@ target_metadata = Base.metadata
 # dialect forwards query-string keys as kwargs to `aiomysql.connect()`,
 # which doesn't accept `ssl-mode` — so we must drop it here.
 _clean_url, _connect_args = _normalize_database_url(settings.DATABASE_URL)
-config.set_main_option("sqlalchemy.url", _clean_url)
+# ConfigParser treats percent signs as interpolation markers. Preserve URL-
+# encoded credentials (for example %40 for @) when storing the connection URL.
+config.set_main_option("sqlalchemy.url", _clean_url.replace("%", "%%"))
 # Persist the connect_args so the async engine picks them up.
 for _k, _v in _connect_args.items():
     config.set_main_option(f"sqlalchemy.{_k}", str(_v))

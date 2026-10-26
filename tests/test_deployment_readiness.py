@@ -103,6 +103,29 @@ def test_deployment_checker_redacts_invalid_environment_values(tmp_path):
     assert "invalid-boolean-do-not-print-this" not in result.stdout + result.stderr
 
 
+def test_alembic_configuration_preserves_url_encoded_credentials():
+    import ast
+    from configparser import ConfigParser
+    from pathlib import Path
+
+    project = Path(__file__).resolve().parents[1]
+    tree = ast.parse((project / "alembic" / "env.py").read_text(encoding="utf-8"))
+    statement = next(node for node in tree.body if isinstance(node, ast.Expr)
+                     and isinstance(node.value, ast.Call)
+                     and isinstance(node.value.func, ast.Attribute)
+                     and node.value.func.attr == "set_main_option"
+                     and node.value.args[0].value == "sqlalchemy.url")
+    parser = ConfigParser()
+    parser.add_section("alembic")
+    config = SimpleNamespace(set_main_option=lambda name, value: parser.set("alembic", name, value))
+    url = "mysql+aiomysql://user:encoded%40password%25@db.example/robots"
+    # Exercise the actual env.py assignment without requiring a database or
+    # importing the migration runtime, using its underlying ConfigParser behavior.
+    exec(compile(ast.Module(body=[statement], type_ignores=[]), "alembic/env.py", "exec"),
+         {"config": config, "_clean_url": url})
+    assert parser.get("alembic", "sqlalchemy.url") == url
+
+
 @pytest.mark.asyncio
 async def test_public_registration_always_creates_user():
     class Result:
